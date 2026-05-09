@@ -1,0 +1,52 @@
+{
+  "model_name": "next_lesson_ranker_lgbm",
+  "model_version": "v1",
+  "model_type": "LightGBM LGBMRanker",
+  "objective": "lambdarank",
+  "target": "relevance",
+  "feature_columns": [
+    "user_level_num",
+    "practical_experience_num",
+    "learning_goal_num",
+    "time_commitment_minutes",
+    "completed_subtopics_count",
+    "completion_ratio",
+    "average_best_score_percent",
+    "average_all_attempts_score_percent",
+    "last_quiz_score",
+    "failed_quiz_count",
+    "days_since_last_activity",
+    "candidate_level_num",
+    "candidate_topic_order_index",
+    "candidate_subtopic_order_index",
+    "candidate_estimated_minutes",
+    "is_preferred_topic",
+    "is_same_topic_as_last_completed",
+    "is_next_subtopic_in_same_topic",
+    "is_first_subtopic_in_topic",
+    "is_level_match",
+    "is_time_commitment_match",
+    "is_topic_not_started",
+    "is_topic_in_progress",
+    "need_reinforcement",
+    "last_score_for_candidate",
+    "best_score_for_candidate",
+    "attempts_for_candidate"
+  ],
+  "id_columns": [
+    "group_id",
+    "user_id",
+    "candidate_subtopic_code"
+  ],
+  "train_path": "data\\next_lesson_ranker_train.csv",
+  "test_path": "data\\next_lesson_ranker_test.csv",
+  "train_rows": 60000,
+  "test_rows": 15000,
+  "train_groups": 2400,
+  "test_groups": 600,
+  "metrics": {
+    "ndcg@1": 1.0,
+    "ndcg@3": 0.998367,
+    "ndcg@5": 0.996309
+  }
+}
