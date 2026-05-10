@@ -1,6 +1,6 @@
 {
   "model_name": "next_lesson_ranker_lgbm",
-  "model_version": "v1",
+  "model_version": "v2",
   "model_type": "LightGBM LGBMRanker",
   "objective": "lambdarank",
   "target": "relevance",
@@ -45,8 +45,8 @@
   "train_groups": 2400,
   "test_groups": 600,
   "metrics": {
-    "ndcg@1": 1.0,
-    "ndcg@3": 0.998367,
-    "ndcg@5": 0.996309
+    "ndcg@1": 0.999167,
+    "ndcg@3": 0.998565,
+    "ndcg@5": 0.998673
   }
 }

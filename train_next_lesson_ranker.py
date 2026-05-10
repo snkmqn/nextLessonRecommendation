@@ -64,7 +64,7 @@ def load_dataset(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
             f"Dataset not found: {path}. "
-            f"First run: python ml/generate_next_lesson_ranker_dataset.py"
+            f"First run: python generate_next_lesson_ranker_dataset.py"
         )
 
     df = pd.read_csv(path)
@@ -165,7 +165,7 @@ def train() -> None:
 
     metadata = {
         "model_name": "next_lesson_ranker_lgbm",
-        "model_version": "v1",
+        "model_version": "v2",
         "model_type": "LightGBM LGBMRanker",
         "objective": "lambdarank",
         "target": TARGET_COLUMN,

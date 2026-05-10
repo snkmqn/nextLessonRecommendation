@@ -151,7 +151,7 @@ def pick_preferred_topics(user_level_num: int) -> list[str]:
     return selected
 
 
-def generate_completed_subtopics(user_level_num: int) -> dict[str, float]:
+def generate_completed_subtopics(user_level_num: int) -> dict[str, dict]:
     completed = {}
 
     if user_level_num == 0:
@@ -164,18 +164,23 @@ def generate_completed_subtopics(user_level_num: int) -> dict[str, float]:
         max_completed = random.randint(8, 24)
 
     ordered = SUBTOPICS[:]
-
-    # Пользователь чаще проходит beginner/intermediate раньше advanced.
     ordered.sort(key=lambda s: (s.topic_level_num, s.topic_order_index, s.subtopic_order_index))
 
     for subtopic in ordered[:max_completed]:
-        # completed значит >= 70
-        completed[subtopic.subtopic_code] = round(random.uniform(70, 100), 2)
+        best_score = round(random.uniform(70, 100), 2)
+        attempts = generate_attempt_history(best_score, is_passed=True)
+
+        completed[subtopic.subtopic_code] = {
+            "best_score": best_score,
+            "last_score": attempts[-1],
+            "attempts_count": len(attempts),
+            "attempts": attempts,
+        }
 
     return completed
 
 
-def generate_failed_subtopics(completed: dict[str, float]) -> dict[str, float]:
+def generate_failed_subtopics(completed: dict[str, dict]) -> dict[str, dict]:
     failed = {}
 
     available = [s for s in SUBTOPICS if s.subtopic_code not in completed]
@@ -184,9 +189,40 @@ def generate_failed_subtopics(completed: dict[str, float]) -> dict[str, float]:
     failed_count = random.choices([0, 1, 2, 3], weights=[5, 3, 1, 1])[0]
 
     for subtopic in available[:failed_count]:
-        failed[subtopic.subtopic_code] = round(random.uniform(20, 69.99), 2)
+        best_score = round(random.uniform(20, 69.99), 2)
+        attempts = generate_attempt_history(best_score, is_passed=False)
+
+        failed[subtopic.subtopic_code] = {
+            "best_score": best_score,
+            "last_score": attempts[-1],
+            "attempts_count": len(attempts),
+            "attempts": attempts,
+        }
 
     return failed
+
+
+def generate_attempt_history(best_score: float, is_passed: bool) -> list[float]:
+    attempts_count = random.randint(1, 4)
+
+    if attempts_count == 1:
+        return [best_score]
+
+    attempts = []
+
+    for _ in range(attempts_count - 1):
+        if is_passed:
+            attempts.append(round(random.uniform(20, best_score), 2))
+        else:
+            attempts.append(round(random.uniform(20, min(best_score, 69.99)), 2))
+
+    attempts.append(best_score)
+
+    # Иногда последняя попытка хуже лучшей, чтобы last_score != best_score.
+    if is_passed and random.random() < 0.35:
+        attempts[-1] = round(random.uniform(20, 69.99), 2)
+
+    return attempts
 
 
 def latest_completed_topic(completed: dict[str, float]) -> str | None:
@@ -279,14 +315,16 @@ def make_row(user_id: int, candidate: Subtopic, user: dict) -> dict:
     attempts_for_candidate = 0
 
     if is_completed:
-        best_score_for_candidate = completed[candidate.subtopic_code]
-        last_score_for_candidate = best_score_for_candidate
-        attempts_for_candidate = random.randint(1, 3)
+        progress = completed[candidate.subtopic_code]
+        best_score_for_candidate = progress["best_score"]
+        last_score_for_candidate = progress["last_score"]
+        attempts_for_candidate = progress["attempts_count"]
 
     if is_failed:
-        best_score_for_candidate = failed[candidate.subtopic_code]
-        last_score_for_candidate = best_score_for_candidate
-        attempts_for_candidate = random.randint(1, 3)
+        progress = failed[candidate.subtopic_code]
+        best_score_for_candidate = progress["best_score"]
+        last_score_for_candidate = progress["last_score"]
+        attempts_for_candidate = progress["attempts_count"]
 
     # Candidate filtering как на backend:
     # completed subtopic не должен быть нормальным кандидатом.
@@ -407,18 +445,27 @@ def generate_user(user_id: int) -> dict:
     completed = generate_completed_subtopics(user_level_num)
     failed = generate_failed_subtopics(completed)
 
-    completed_scores = list(completed.values())
-    failed_scores = list(failed.values())
-    all_scores = completed_scores + failed_scores
+    completed_best_scores = [x["best_score"] for x in completed.values()]
+    failed_best_scores = [x["best_score"] for x in failed.values()]
+    all_best_scores = completed_best_scores + failed_best_scores
 
-    if completed_scores:
-        average_best_score_percent = round(sum(completed_scores) / len(completed_scores), 2)
+    all_attempt_scores = []
+    for item in list(completed.values()) + list(failed.values()):
+        all_attempt_scores.extend(item["attempts"])
+
+    latest_scores = [
+        item["last_score"]
+        for item in list(completed.values()) + list(failed.values())
+    ]
+
+    if all_best_scores:
+        average_best_score_percent = round(sum(all_best_scores) / len(all_best_scores), 2)
     else:
         average_best_score_percent = 0
 
-    if all_scores:
-        average_all_attempts_score_percent = round(sum(all_scores) / len(all_scores), 2)
-        last_quiz_score = random.choice(all_scores)
+    if all_attempt_scores:
+        average_all_attempts_score_percent = round(sum(all_attempt_scores) / len(all_attempt_scores), 2)
+        last_quiz_score = random.choice(latest_scores)
     else:
         average_all_attempts_score_percent = 0
         last_quiz_score = -1
@@ -432,7 +479,7 @@ def generate_user(user_id: int) -> dict:
     if need_reinforcement:
         reinforcement_subtopic_code = min(
             failed.items(),
-            key=lambda item: item[1],
+            key=lambda item: item[1]["last_score"],
         )[0]
 
     return {
@@ -449,8 +496,12 @@ def generate_user(user_id: int) -> dict:
         "average_best_score_percent": average_best_score_percent,
         "average_all_attempts_score_percent": average_all_attempts_score_percent,
         "last_quiz_score": last_quiz_score,
-        "failed_quiz_count": len(failed),
-        "days_since_last_activity": random.randint(0, 30),
+        "failed_quiz_count": sum(
+    1
+    for item in list(completed.values()) + list(failed.values())
+    if item["last_score"] < 70
+),
+        "days_since_last_activity": generate_days_since_last_activity(),
     }
 
 
@@ -495,6 +546,19 @@ def split_train_test(rows: list[dict]) -> tuple[list[dict], list[dict]]:
             train_rows.append(row)
 
     return train_rows, test_rows
+
+def generate_days_since_last_activity() -> int:
+    return random.choices(
+        population=[
+            random.randint(0, 3),      # active users
+            random.randint(4, 14),     # recently inactive
+            random.randint(15, 30),    # inactive
+            random.randint(31, 90),    # long inactive
+            random.randint(91, 180),   # very long inactive
+        ],
+        weights=[45, 25, 15, 10, 5],
+        k=1,
+    )[0]
 
 
 def main() -> None:
