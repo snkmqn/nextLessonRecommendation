@@ -1,8 +1,8 @@
 # Next Lesson Recommendation ML Service
 
-This project is an ML service for ranking the best next lesson candidates for a user in a financial literacy learning application.
+This project is an ML service for ranking next lesson candidates in a financial literacy learning application.
 
-The model analyzes the user learning profile, progress history, quiz results, preferred topics, and candidate lesson features, then returns a sorted list of recommended next subtopics.
+The service receives candidate subtopics from the backend, analyzes user profile data, learning progress, quiz history, activity information, and candidate lesson features, then returns the candidates sorted by predicted relevance.
 
 ## Project Structure
 
@@ -57,21 +57,29 @@ Activate it on Windows:
 .\.venv\Scripts\activate
 ```
 
+Activate it on macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
 Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Generating the Dataset
+## Dataset Generation
 
-To generate the synthetic dataset again, run:
+The project uses a synthetic dataset for training and testing the ranking model.
+
+To generate the dataset, run:
 
 ```bash
 python generate_next_lesson_ranker_dataset.py
 ```
 
-The generated datasets will be saved to:
+The generated files will be saved to:
 
 ```text
 data/next_lesson_ranker_train.csv
@@ -80,7 +88,7 @@ data/next_lesson_ranker_test.csv
 
 ## Training the Model
 
-To train the model again, run:
+To train the model, run:
 
 ```bash
 python train_next_lesson_ranker.py
@@ -98,6 +106,8 @@ Model metadata will be saved to:
 models/next_lesson_ranker_metadata.json
 ```
 
+The metadata file contains the model name, model version, feature columns, dataset sizes, group counts, and evaluation metrics.
+
 ## Running the API
 
 Start the service:
@@ -106,7 +116,7 @@ Start the service:
 uvicorn app:app --reload
 ```
 
-The API will be available locally, for example:
+The API will be available locally at:
 
 ```text
 http://127.0.0.1:8000
@@ -114,7 +124,13 @@ http://127.0.0.1:8000
 
 ## Health Check Endpoint
 
-Example endpoint:
+Endpoint:
+
+```text
+GET /health
+```
+
+Example request:
 
 ```text
 GET http://127.0.0.1:8000/health
@@ -127,13 +143,19 @@ Example response:
   "status": "ok",
   "model_loaded": true,
   "model_name": "next_lesson_ranker_lgbm",
-  "model_version": "v1"
+  "model_version": "v2"
 }
 ```
 
 ## Ranking Endpoint
 
-Example endpoint:
+Endpoint:
+
+```text
+POST /rank/next-lessons
+```
+
+Example request:
 
 ```text
 POST http://127.0.0.1:8000/rank/next-lessons
@@ -223,13 +245,46 @@ Example response:
     }
   ],
   "model_name": "next_lesson_ranker_lgbm",
-  "model_version": "v1"
+  "model_version": "v2"
 }
 ```
 
+## Request Fields
+
+| Field | Description |
+|---|---|
+| `candidate_subtopic_code` | Candidate subtopic identifier. |
+| `user_level_num` | Encoded user financial literacy level. |
+| `practical_experience_num` | Encoded practical experience level. |
+| `learning_goal_num` | Encoded learning goal. |
+| `time_commitment_minutes` | User's available learning time in minutes. |
+| `completed_subtopics_count` | Number of successfully completed subtopics. |
+| `completion_ratio` | Ratio of completed subtopics to total subtopics. |
+| `average_best_score_percent` | Average best score across attempted quizzes. |
+| `average_all_attempts_score_percent` | Average score across all completed quiz attempts. |
+| `last_quiz_score` | Score of the latest completed quiz attempt. |
+| `failed_quiz_count` | Number of quizzes where the latest attempt is below the passing score. |
+| `days_since_last_activity` | Number of days since the user's last learning activity. |
+| `candidate_level_num` | Encoded level of the candidate subtopic. |
+| `candidate_topic_order_index` | Order index of the candidate topic. |
+| `candidate_subtopic_order_index` | Order index of the candidate subtopic within the topic. |
+| `candidate_estimated_minutes` | Estimated time required to complete the candidate subtopic. |
+| `is_preferred_topic` | Whether the candidate topic matches the user's preferred topics. |
+| `is_same_topic_as_last_completed` | Whether the candidate belongs to the same topic as the latest completed subtopic. |
+| `is_next_subtopic_in_same_topic` | Whether the candidate is the next logical subtopic in the same topic. |
+| `is_first_subtopic_in_topic` | Whether the candidate is the first subtopic of its topic. |
+| `is_level_match` | Whether the candidate level matches the user's level. |
+| `is_time_commitment_match` | Whether the candidate duration fits the user's time commitment. |
+| `is_topic_not_started` | Whether the user has not started the candidate topic. |
+| `is_topic_in_progress` | Whether the user has already started the candidate topic. |
+| `need_reinforcement` | Whether the candidate is related to reinforcement. |
+| `last_score_for_candidate` | Latest score for the candidate subtopic, or `-1` if the user has not attempted it. |
+| `best_score_for_candidate` | Best historical score for the candidate subtopic, or `-1` if the user has not attempted it. |
+| `attempts_for_candidate` | Number of attempts for the candidate subtopic. |
+
 ## Model Details
 
-The project uses a LightGBM ranking model:
+The service uses a LightGBM ranking model:
 
 ```text
 LightGBM LGBMRanker
@@ -247,27 +302,79 @@ The target column is:
 relevance
 ```
 
-The model ranks candidate lessons inside one user group and returns candidates ordered by predicted score.
+The model ranks candidate lessons within the same user group. Each group represents one recommendation request for one user. The service returns a predicted score for each candidate, and the backend can sort candidates by this score in descending order.
 
-## Metrics
+## Feature Columns
 
-Current model metadata contains the following evaluation metrics:
+The model is trained using the following feature columns:
 
 ```text
-NDCG@1 = 1.0
-NDCG@3 = 0.998367
-NDCG@5 = 0.996309
+user_level_num
+practical_experience_num
+learning_goal_num
+time_commitment_minutes
+completed_subtopics_count
+completion_ratio
+average_best_score_percent
+average_all_attempts_score_percent
+last_quiz_score
+failed_quiz_count
+days_since_last_activity
+candidate_level_num
+candidate_topic_order_index
+candidate_subtopic_order_index
+candidate_estimated_minutes
+is_preferred_topic
+is_same_topic_as_last_completed
+is_next_subtopic_in_same_topic
+is_first_subtopic_in_topic
+is_level_match
+is_time_commitment_match
+is_topic_not_started
+is_topic_in_progress
+need_reinforcement
+last_score_for_candidate
+best_score_for_candidate
+attempts_for_candidate
 ```
+
+## Evaluation Metrics
+
+The model is evaluated using NDCG metrics:
+
+```text
+NDCG@1
+NDCG@3
+NDCG@5
+```
+
+These metrics evaluate whether the most relevant candidate lessons are ranked near the top of the recommendation list.
+
+The exact metric values are stored in:
+
+```text
+models/next_lesson_ranker_metadata.json
+```
+
+## Backend Integration
+
+The backend service prepares candidate lessons and feature values, sends them to this ML service, and uses the returned scores to rank the candidates.
+
+Recommended backend flow:
+
+```text
+1. Build candidate subtopics.
+2. Calculate user profile, progress, activity, and candidate features.
+3. Send all candidates to POST /rank/next-lessons.
+4. Receive predicted scores.
+5. Sort candidates by score in descending order.
+6. Use the highest-ranked candidates as next lesson recommendations.
+```
+
+If the ML service is unavailable, the backend should use a rule-based fallback recommendation strategy.
 
 ## Notes
 
-The project uses a synthetic dataset for training and testing:
+The dataset is synthetic and does not contain real user personal data.
 
-```text
-data/next_lesson_ranker_train.csv
-data/next_lesson_ranker_test.csv
-```
-
-The model does not store real user personal data in this repository.
-
-The backend service should prepare candidate lessons, send them to this ML service, and use the returned ranking to choose the most suitable next lesson for the user.
+The ML service is responsible only for ranking already prepared candidates. Core application logic such as quiz submission, score calculation, XP assignment, progress updates, and learning statistics calculation must remain on the backend side.
